@@ -4,6 +4,7 @@ import time
 from typing import Optional
 
 import aiohttp
+from eth_abi import decode as abi_decode
 
 from inputs.base import Message, SensorConfig
 from inputs.base.loop import FuserInput
@@ -87,7 +88,12 @@ class GovernanceEthereum(FuserInput[SensorConfig, Optional[str]]):
 
     def decode_eth_response(self, hex_response: str) -> Optional[str]:
         """
-        Decodes an Ethereum eth_call response.
+        Decodes an Ethereum eth_call response using standard ABI decoding.
+
+        The getRuleSet() function returns a string, which in ABI encoding is:
+        - First 32 bytes: offset to the string data (usually 0x20 = 32)
+        - Next 32 bytes: length of the string
+        - Remaining bytes: the actual string data
 
         Parameters
         ----------
@@ -99,27 +105,35 @@ class GovernanceEthereum(FuserInput[SensorConfig, Optional[str]]):
         Optional[str]
             Decoded string, or None on error.
         """
-        if hex_response.startswith("0x"):
-            hex_response = hex_response[2:]
-
         try:
+            if hex_response.startswith("0x"):
+                hex_response = hex_response[2:]
+
             response_bytes = bytes.fromhex(hex_response)
 
-            # Read offsets and string length
-            # offset = int.from_bytes(response_bytes[:32], "big")
-            string_length = int.from_bytes(response_bytes[96:128], "big")
+            # Use eth_abi to decode the string response
+            # The function returns a single string value
+            decoded = abi_decode(["string"], response_bytes)
+            
+            if decoded and len(decoded) > 0:
+                decoded_string = decoded[0]
+                
+                # Remove any non-printable characters for safety
+                cleaned_string = "".join(
+                    ch for ch in decoded_string if ch.isprintable()
+                )
+                
+                logging.debug(f"Successfully decoded governance rule: {cleaned_string}")
+                return cleaned_string
+            else:
+                logging.error("Decoded result is empty")
+                return None
 
-            # Extract and decode string
-            string_bytes = response_bytes[128 : 128 + string_length]
-            decoded_string = string_bytes.decode("utf-8")
-
-            # Remove unexpected control characters (like \x19)
-            cleaned_string = "".join(ch for ch in decoded_string if ch.isprintable())
-
-            return cleaned_string
-
+        except ValueError as e:
+            logging.error(f"ABI decoding error: {e}")
+            return None
         except Exception as e:
-            logging.error(f"Decoding error: {e}")
+            logging.error(f"Unexpected decoding error: {e}")
             return None
 
     def __init__(self, config: SensorConfig):
