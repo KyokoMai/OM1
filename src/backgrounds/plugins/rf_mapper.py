@@ -353,7 +353,7 @@ class RFmapper(Background[RFmapperConfig]):
                 except Exception as e:
                     logging.error(f"Error sharing to Fabric: {e}")
 
-                time.sleep(1)  # we should send a payload every second
+                self.sleep(1)  # we should send a payload every second
 
         except KeyboardInterrupt:
             logging.info("Stopping RF scanner...")
