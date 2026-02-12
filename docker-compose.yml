@@ -44,3 +44,12 @@ services:
     group_add:
       - audio
     command: ["${OM1_COMMAND:-unitree_go2_modes}"]
+      # FIXED WebSim Docker conflict #147 bounty $250
+  websim:
+    image: openmind/websim:latest
+    container_name: om1-websim
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - PORT=8081
+    command: ["npm", "start", "--port", "8081"]
