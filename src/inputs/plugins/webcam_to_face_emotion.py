@@ -40,7 +40,15 @@ class FaceEmotionCapture(FuserInput[SensorConfig, Optional[cv2.typing.MatLike]])
 
     def __init__(self, config: SensorConfig):
         """
-        Initialize FaceEmotionCapture instance.
+        Initialize the FaceEmotionCapture input handler.
+
+        Sets up the required providers and resources for handling facial emotion recognition.
+        Initializes OpenCV face cascade classifier and webcam capture if available.
+
+        Parameters
+        ----------
+        config : SensorConfig
+            Configuration for the sensor input.
         """
         super().__init__(config)
 
@@ -79,6 +87,9 @@ class FaceEmotionCapture(FuserInput[SensorConfig, Optional[cv2.typing.MatLike]])
         # Capture a frame every 500 ms
         if self.have_cam and self.cap is not None:
             ret, frame = self.cap.read()
+            if not ret:
+                logging.warning("Failed to capture frame from camera")
+                return None
             return frame
 
     async def _raw_to_text(
