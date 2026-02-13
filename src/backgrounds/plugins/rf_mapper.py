@@ -75,6 +75,9 @@ class RFmapper(Background[RFmapperConfig]):
         self.scan_idx = 0
         self.scan_last_sent = 0
 
+        # FIX #1: Add thread lock for scan_results synchronization
+        self.scan_lock = threading.Lock()
+
         self.payload_idx = 0
 
         self.odom_rockchip_ts = 0.0
@@ -113,7 +116,8 @@ class RFmapper(Background[RFmapperConfig]):
 
         self.seen_devices: Dict[str, RFData] = {}
 
-        self.seen_names: List[str] = []
+        # FIX #2: Remove unused variable self.seen_names
+        # self.seen_names: List[str] = []  # REMOVED
 
         self.start()
 
@@ -229,7 +233,10 @@ class RFmapper(Background[RFmapperConfig]):
         logging.info("Starting RF scan thread...")
         self.running = True
         while self.running:
-            self.scan_results = self.loop.run_until_complete(self.scan())
+            # FIX #1: Protect shared state with lock
+            scan_results = self.loop.run_until_complete(self.scan())
+            with self.scan_lock:
+                self.scan_results = scan_results
             logging.info(f"RF scan index: {self.scan_idx}")
             logging.info(f"RF scan last sent: {self.scan_last_sent}")
             time.sleep(0.5)
@@ -262,11 +269,13 @@ class RFmapper(Background[RFmapperConfig]):
                 logging.info(f"RF scan index: {self.scan_idx}")
                 logging.info(f"RF scan last sent: {self.scan_last_sent}")
                 fresh_scan_results = []
-                if self.scan_results and self.scan_idx > self.scan_last_sent:
-                    fresh_scan_results = self.scan_results
-                    self.scan_last_sent = self.scan_idx
-                    self.scan_results = []
-                    logging.info(f"RF scan sending new payload: {self.scan_last_sent}")
+                # FIX #1: Protect shared state with lock
+                with self.scan_lock:
+                    if self.scan_results and self.scan_idx > self.scan_last_sent:
+                        fresh_scan_results = self.scan_results
+                        self.scan_last_sent = self.scan_idx
+                        self.scan_results = []
+                        logging.info(f"RF scan sending new payload: {self.scan_last_sent}")
 
                 # basic gps data and occasional scan results
                 try:
@@ -285,7 +294,8 @@ class RFmapper(Background[RFmapperConfig]):
                             self.ble_scan = g["ble_scan"]
                             logging.debug(f"RF scan results {self.ble_scan}")
                         else:
-                            logging.warn("No nRF52 scan results")
+                            # FIX #3: Change deprecated logging.warn to logging.warning
+                            logging.warning("No nRF52 scan results")
 
                 except Exception as e:
                     logging.error(f"Error parsing GPS: {e}")
